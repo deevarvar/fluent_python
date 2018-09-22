@@ -17,6 +17,8 @@ import time
 import functools
 import errno
 from timeit import default_timer as timer
+import shutil
+from concurrent import futures
 
 FLAG_BASEURL='https://www.countries-ofthe-world.com/'
 INDEX_URI='flags-of-asia.html'
@@ -64,22 +66,37 @@ def getflagpage():
         handle.write(rsp.text)
 
 @benchmark
-def getcountryflag():
+def getoneflag(imgelement):
+    imgurl = FLAG_BASEURL + imgelement.get('src')
+    #flags-normal/flag-of-Afghanistan.png
+    imgname = FLAGDIR + '/' + imgelement.get('src').split('/')[1]
+    rsp = requests.get(imgurl, headers=Headers)
+    rsp.raise_for_status()
+    # open as binary and get content
+    with open(imgname, 'wb') as handle:
+        handle.write(rsp.content)
+
+@benchmark
+def getcountryflags():
     page = pq(filename=FLAGPAGE)
     #listcomp, lxml element
     #imglist = [ i.get('src') for i in page('table').find('img')]
     #print(imglist)
     for imgelement in page('table').find('img'):
-        imgurl = FLAG_BASEURL + imgelement.get('src')
-        rsp = requests.get(imgurl, headers=Headers)
-        rsp.raise_for_status()
-        imgname = imgelement.get('src').split('/')[1]
-        #open as binary and get content
-        with open(FLAGDIR+ '/' + imgname, 'wb') as handle:
-            handle.write(rsp.content)
+        getoneflag(imgelement)
+
+@benchmark
+def futuresgetflags():
+    page = pq(filename=FLAGPAGE)
+    workers = 20
+    imgelementlist = [element for element in page('table').find('img')]
+    with futures.ThreadPoolExecutor(workers) as executor:
+        executor.map(getoneflag, imgelementlist)
 
 
 if __name__ == '__main__':
+    shutil.rmtree(FLAGDIR)
     mkdirp(FLAGDIR)
     getflagpage()
-    getcountryflag()
+    getcountryflags()
+    #futuresgetflags()
