@@ -61,8 +61,8 @@ def mkdirp(dirname):
 def getflagpage():
     rsp = requests.get(FLAG_BASEURL + INDEX_URI, headers=Headers)
     rsp.raise_for_status()
-
-    with open(FLAGPAGE,'w+') as handle:
+    import io
+    with io.open(FLAGPAGE,'w+', encoding='utf-8') as handle:
         handle.write(rsp.text)
 
 @benchmark
