@@ -27,6 +27,7 @@ FLAGDIR='./flags'
 Headers = {
     'user-agent': "Mozilla"
 }
+PY3k = sys.version_info >= (3,)
 
 def benchmark(func):
     """
@@ -61,9 +62,15 @@ def mkdirp(dirname):
 def getflagpage():
     rsp = requests.get(FLAG_BASEURL + INDEX_URI, headers=Headers)
     rsp.raise_for_status()
-    import io
-    with io.open(FLAGPAGE,'w+', encoding='utf-8') as handle:
-        handle.write(rsp.text)
+    if PY3k:
+        with open(FLAGPAGE, 'w+', encoding='utf-8') as handle:
+            handle.write(rsp.text)   #works for py 3.x
+            return rsp.text
+    else:
+        with open(FLAGPAGE, 'w+') as handle:
+            htmlstr = rsp.text.encode('utf-8')
+            handle.write(htmlstr) # works for py 2.7
+            return htmlstr
 
 @benchmark
 def getoneflag(imgelement):
@@ -77,17 +84,19 @@ def getoneflag(imgelement):
         handle.write(rsp.content)
 
 @benchmark
-def getcountryflags():
-    page = pq(filename=FLAGPAGE)
+def getcountryflags(htmlstr):
+    #avoid file open in pq, unicode is not well supported.
+    page = pq(htmlstr)
     #listcomp, lxml element
     #imglist = [ i.get('src') for i in page('table').find('img')]
     #print(imglist)
+    #use items() is better, so imgele will be PyQuery obj instead of lxml obj.
     for imgelement in page('table').find('img'):
         getoneflag(imgelement)
 
 @benchmark
-def futuresgetflags():
-    page = pq(filename=FLAGPAGE)
+def futuresgetflags(htmlstr):
+    page = pq(htmlstr)
     workers = 20
     imgelementlist = [element for element in page('table').find('img')]
     with futures.ThreadPoolExecutor(workers) as executor:
@@ -95,8 +104,9 @@ def futuresgetflags():
 
 
 if __name__ == '__main__':
-    shutil.rmtree(FLAGDIR)
+    if os.path.exists(FLAGDIR):
+        shutil.rmtree(FLAGDIR)
     mkdirp(FLAGDIR)
-    getflagpage()
-    getcountryflags()
-    #futuresgetflags()
+    htmlstr=getflagpage()
+    getcountryflags(htmlstr)
+    #futuresgetflags(htmlstr)
