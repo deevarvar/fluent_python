@@ -4,8 +4,11 @@
 """
 use pyquery instead of bs4 to scrape first table in
 https://en.wikipedia.org/wiki/Comparison_of_text_editors
-
-
+curl -v -d "id=varvar&passwd=123" http://www.newsmth.net/nForum/\#\!login
+< Set-Cookie: main[UTMPUSERID]=guest; path=/; domain=.newsmth.net
+< Set-Cookie: main[UTMPKEY]=97765608; path=/; domain=.newsmth.net
+< Set-Cookie: main[UTMPNUM]=7136; path=/; domain=.newsmth.net
+curl -v http://www.newsmth.net/nForum/article/FamilyLife/1760994632?p=2
 """
 
 from pyquery import PyQuery as pq
