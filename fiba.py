@@ -5,6 +5,7 @@ from pyquery import PyQuery as pq
 import sys
 import requests
 from io import open
+from operator import itemgetter
 
 eabaurl="http://www.fiba.basketball/asiacup/2017/eaba/0606/China-Korea#tab=play_by_play"
 eabahtml='./eaba.html'
@@ -21,7 +22,11 @@ with open(boxhtml, 'w+', encoding='utf-8') as f:
 with open(boxhtml, 'r') as f:
     html = f.read()
 target = pq(html)
-scores = list()
+
+TEAMSELECTORS = ["positions", "names", "min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
+            "reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers",
+            "assists", "steals", "block-shots", "plus-minus", "efficiency"]
+
 
 def getboxdemo():
 
@@ -53,16 +58,37 @@ def getbox(html=None):
     if html:
         Aplayerbox, Ateambox, Aplayerinfo = getteaminfo(html('section.box-score_team-A'))
         Bplayerbox, Bteambox, Bplayerinfo = getteaminfo(html('section.box-score_team-B'))
+        '''
         print(Aplayerbox)
         print(Bplayerbox)
         print(Ateambox)
         print(Bteambox)
         print(Aplayerinfo)
         print(Bplayerinfo)
+        '''
+        sortplayer(Aplayerbox,kw='pts')
+        sortplayer(Bplayerbox, kw='pts')
+        sortplayer(Aplayerbox,kw="field-goals-3p")
 
+def sortfunc(elem, kw):
+    if kw in ["field-goals", "field-goals-2p", "field-goals-3p", "free-throw"]:
+        #'1/2 50%'
+        return elem.split(' ')[1]
+    elif kw == 'min':
+        return elem
+    else:
+        return int(elem)
 
-def sortinfo(kw='pts'):
-    pass
+def sortplayer(playerbox, kw='pts'):
+    # reformat the playerbox
+    playerlist = []
+    for index in range(len(playerbox["positions"])):
+        oneplayer = dict()
+        for field,value in playerbox.items():
+            oneplayer[field] = value[index]
+        playerlist.append(oneplayer)
+    sortedlist = sorted(playerlist, key=lambda elem: sortfunc(elem[kw], kw), reverse=True)
+    print(sortedlist)
 
 
 def getteaminfo(html=None):
@@ -93,10 +119,7 @@ def getteaminfo(html=None):
      #   print('playerbox {} length is {} , detail is {}'.format(key, len(value),value))
 
     # add logic to get team total
-    teamsels = ["min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
-              "reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers",
-                "assists", "steals", "block-shots", "plus-minus", "efficiency"]
-    for tdselector in teamsels:
+    for tdselector in TEAMSELECTORS:
         #only one element
         teambox[tdselector] = html('tr.team-totals').find('td.'+tdselector).text()
     #print(teambox)
