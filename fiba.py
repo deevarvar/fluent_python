@@ -6,6 +6,16 @@ import sys
 import requests
 from io import open
 from operator import itemgetter
+import os
+
+qualifierurl="http://www.fiba.basketball/basketballworldcup/2019/asian-qualifiers/fullschedule"
+FIBAURL="http://www.fiba.basketball"
+DATADIR='./data'
+qhtml=os.path.join(DATADIR, 'qualifier.html')
+
+TEAMSELECTORS = ["positions", "names", "min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
+            "reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers",
+            "assists", "steals", "block-shots", "plus-minus", "efficiency"]
 
 eabaurl="http://www.fiba.basketball/asiacup/2017/eaba/0606/China-Korea#tab=play_by_play"
 eabahtml='./eaba.html'
@@ -13,59 +23,205 @@ boxurl='http://www.fiba.basketball/asiacup/2017/eaba/0606/China-Korea#tab=boxsco
 #TODO: need to parse boxurl to get realurl
 realboxurl='http://www.fiba.basketball/en/Module/79afbb16-7c16-4786-87e9-480773a6746c/b1324899-5530-4e2e-90fd-b48bdfbdf8dd'
 boxhtml='./box.html'
+#SPECIAL CASE:
+#http://www.fiba.basketball//en/Module/943235cf-8d74-4311-8e8d-90c6b336a861/0b39b80b-f2e3-448a-9c1d-019e14d3d68b
+# 12 player, one line is not good
+newboxhtml=os.path.join(DATADIR, 'China-Lebanon_box.html')
 
-qualifierurl="http://www.fiba.basketball/basketballworldcup/2019/asian-qualifiers/fullschedule"
-qhtml='./qualifier.html'
+
+
 '''
 rsp = requests.get(qualifierurl)
 with open(qhtml, 'w+', encoding='utf-8') as f:
     f.write(rsp.text)
 
 '''
+from time import strftime, strptime
+
+
+def getbox(html=None):
+    # entry is html
+    if html:
+        Aplayerbox, Ateambox, Aplayerinfo = getteaminfo(html('section.box-score_team-A'))
+        Bplayerbox, Bteambox, Bplayerinfo = getteaminfo(html('section.box-score_team-B'))
+        '''
+        print(Aplayerbox)
+        print(Bplayerbox)
+        print(Ateambox)
+        print(Bteambox)
+        print(Aplayerinfo)
+        print(Bplayerinfo)
+        '''
+        print('TeamA')
+        sortplayer(Aplayerbox,kw='pts', num=3)
+        print('TeamB')
+        sortplayer(Bplayerbox, kw='pts', num=3)
+        #sortplayer(Aplayerbox,kw="field-goals-3p")
+
+def sortfunc(elem, kw):
+    if kw in ["field-goals", "field-goals-2p", "field-goals-3p", "free-throw"]:
+        #'1/2 50%'
+        return elem.split(' ')[1]
+    elif kw == 'min':
+        return elem
+    else:
+        return int(elem)
+
+def sortplayer(playerbox, kw='pts', num=None):
+    # reformat the playerbox
+    playerlist = []
+    for index in range(len(playerbox["pos"])):
+        oneplayer = dict()
+        for field,value in playerbox.items():
+            oneplayer[field] = value[index]
+        playerlist.append(oneplayer)
+    sortedlist = sorted(playerlist, key=lambda elem: sortfunc(elem[kw], kw), reverse=True)
+    #print(sortedlist[:num])
+    for leader in sortedlist[:num]:
+        print("{name}, {pts}, {plus-minus},{efficiency}".format(**leader))
+
+
+def cleandata(playerbox):
+    #in some special case, playerbox element length is not equal...
+    if len(playerbox["min"]) == len(playerbox["pts"]):
+        return playerbox
+    else:
+        # iterate to clean data
+        # Logic may not be complete
+        badindexes = []
+        for index, min in enumerate(playerbox['min']):
+            #length should be 12:24
+            if len(min) != 5:
+                print('badindex {}'.format(index))
+                badindexes.append(index)
+        if len(badindexes) > 0:
+            print(playerbox['name'])
+        '''
+        bad way, playerbox is changing!!!
+        for _ in badindexes:
+            del playerbox['name'][_]
+            del playerbox['pos'][_]
+            del playerbox['min'][_]
+        '''
+        #use listcomp
+        playerbox['name'] = [element for i, element in enumerate(playerbox['name']) if i not in badindexes]
+        playerbox['pos'] = [element for i, element in enumerate(playerbox['pos']) if i not in badindexes]
+        playerbox['min'] = [element for i, element in enumerate(playerbox['min']) if i not in badindexes]
+        return playerbox
+
+
+def getteaminfo(html=None):
+    playerbox = {}
+    teambox ={}
+    playerinfo = {}
+    # structure is similar:
+    # pos, name seems not that easy to summarize
+    playerbox['pos'] = [pos.text() for pos in html('tr td.pos').items()]
+    playerbox['name'] = [name.text() for name in html('tr td.name a.player-profile-link').items()]
+
+    # exclude team rebounds etc..
+    onetdsels = ["reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers"]
+
+    for tdsel in onetdsels:
+        trs = html('tr').not_('.team-totals, .coaches')
+        playerbox[tdsel] = [data.text() for data in trs.find('td.'+tdsel).items() if data.text()]
+
+    # the other field  can be summarized by
+    # non tr class team-totals , td class
+    tdsels = ["min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
+              "assists", "steals", "block-shots", "plus-minus", "efficiency"]
+    for tdselector in tdsels:
+        trs = html('tr').not_('.team-totals')
+        playerbox[tdselector] = [data.text() for data in trs.find('td.'+tdselector).items() if data.text()]
+
+    #add logic to clean
+    playerbox = cleandata(playerbox)
+    #for key,value in playerbox.items():
+     #   print('playerbox {} length is {} , detail is {}'.format(key, len(value),value))
+
+    # add logic to get team total
+    for tdselector in TEAMSELECTORS:
+        #only one element
+        teambox[tdselector] = html('tr.team-totals').find('td.'+tdselector).text()
+    #print(teambox)
+    # get coach, assistant, starter
+    playerinfo["coaches"] = html('div.coaches-list span.value').text()
+    playerinfo["assistants"] = [assistant.text() for assistant in html('div.assistants-list span.value').items()]
+    playerinfo["starters"] = [start.text() for start in html('tr.x--player-is-starter td.name').items()]
+    return playerbox, teambox, playerinfo
 
 # date , match url
-def getmatch():
-    matchinfos = list()
+def getmatches():
+    matchinfoes = list()
     for daydiv in target('li#Past div.day_content').items():
         matchday = daydiv('.section_header h4').text()
         #get day of week
-        from time import strftime, strptime
-        dow = strftime('%A', strptime(matchday, '%d %B %Y'))
-        print("{} {}".format(dow, matchday))
 
+        dow = strftime('%A', strptime(matchday, '%d %B %Y'))
+        #print("{} {}".format(dow, matchday))
         from collections import namedtuple
         #use namedtuple to record
         Matchtuple = namedtuple('Matchtuple', ["date",'matchurl','group', 'venue'])
-        matchinfos = matchinfos + [Matchtuple(matchday, a.attr('href'), a.attr('data-group'), a.attr('data-venues'))for a in daydiv('a.score_cell').items()]
-        print("len is {}, {}".format(len(matchinfos),matchinfos))
-
-    #get gamepage_tabs
+        matchinfoes = matchinfoes + [Matchtuple(matchday, a.attr('href'), a.attr('data-group'), a.attr('data-venues'))for a in daydiv('a.score_cell').items()]
+        #print("len is {}, {}".format(len(matchinfos),matchinfos))
+    return matchinfoes
 
 
 def getupcomingmatch():
     pass
 
+
+def getmatchbydate(matchinfoes=None, date='1/1/2018'):
+    for matchinfo in matchinfoes:
+        day, matchurl, group, venue = matchinfo
+        if strptime(day, "%d %B %Y") > strptime(date, '%d/%m/%Y'):
+            print('{}, {}'.format(day, matchurl))
+            urlprefix = matchurl.split('/')[-1]
+            htmlfile = os.path.join(DATADIR,urlprefix+'.html')
+            if os.path.isfile(htmlfile) is False:
+                rsp = requests.get(FIBAURL + matchurl)
+                with open(htmlfile, 'w+', encoding='utf-8') as f:
+                    f.write(rsp.text)
+
+            with open(htmlfile, 'r', encoding='utf-8') as f:
+                html = f.read()
+            target = pq(html)
+            #get the box page
+            ajaxurl = target('div#gamepage_tabs li[data-tab-content=boxscore]').attr('data-ajax-url')
+            if ajaxurl:
+                print(ajaxurl)
+                boxfile = os.path.join(DATADIR,urlprefix+'_box.html')
+                if os.path.isfile(boxfile) is False:
+                    rsp = requests.get(FIBAURL + ajaxurl)
+                    with open(boxfile, 'w+', encoding='utf-8') as f:
+                        f.write(rsp.text)
+                with open(boxfile, 'r', encoding='utf-8') as f:
+                    html = f.read()
+                target = pq(html)
+                getbox(html=target)
+            else:
+                print("no match details for {}".format(matchurl.split('.')[0]))
+
+
 with open(qhtml, 'r',encoding='utf-8') as f:
     html = f.read()
 target = pq(html)
 
-getmatch()
+matchinfoes = getmatches()
+getmatchbydate(matchinfoes, date='1/12/2018')
 
 exit(-1)
+
 
 '''
 rsp = requests.get(realboxurl)
 with open(boxhtml, 'w+', encoding='utf-8') as f:
     f.write(rsp.text)
 '''
-with open(boxhtml, 'r', encoding='utf-8') as f:
+with open(newboxhtml, 'r', encoding='utf-8') as f:
     html = f.read()
 target = pq(html)
-
-
-TEAMSELECTORS = ["positions", "names", "min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
-            "reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers",
-            "assists", "steals", "block-shots", "plus-minus", "efficiency"]
+getbox(html=target)
 
 
 def getboxdemo():
@@ -93,83 +249,7 @@ def getboxdemo():
     print(threepointfgs)
     print(freethrows)
 
-def getbox(html=None):
-    # entry is html
-    if html:
-        Aplayerbox, Ateambox, Aplayerinfo = getteaminfo(html('section.box-score_team-A'))
-        Bplayerbox, Bteambox, Bplayerinfo = getteaminfo(html('section.box-score_team-B'))
-        '''
-        print(Aplayerbox)
-        print(Bplayerbox)
-        print(Ateambox)
-        print(Bteambox)
-        print(Aplayerinfo)
-        print(Bplayerinfo)
-        '''
-        sortplayer(Aplayerbox,kw='pts')
-        sortplayer(Bplayerbox, kw='pts')
-        sortplayer(Aplayerbox,kw="field-goals-3p")
 
-def sortfunc(elem, kw):
-    if kw in ["field-goals", "field-goals-2p", "field-goals-3p", "free-throw"]:
-        #'1/2 50%'
-        return elem.split(' ')[1]
-    elif kw == 'min':
-        return elem
-    else:
-        return int(elem)
-
-def sortplayer(playerbox, kw='pts'):
-    # reformat the playerbox
-    playerlist = []
-    for index in range(len(playerbox["positions"])):
-        oneplayer = dict()
-        for field,value in playerbox.items():
-            oneplayer[field] = value[index]
-        playerlist.append(oneplayer)
-    sortedlist = sorted(playerlist, key=lambda elem: sortfunc(elem[kw], kw), reverse=True)
-    print(sortedlist)
-
-
-def getteaminfo(html=None):
-    playerbox = {}
-    teambox ={}
-    playerinfo = {}
-    # structure is similar:
-    # pos, name seems not that easy to summarize
-    playerbox['positions'] = [pos.text() for pos in html('tr td.pos').items()]
-    playerbox['names'] = [name.text() for name in html('tr td.name a.player-profile-link').items()]
-
-    # exclude team rebounds etc..
-    onetdsels = ["reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers"]
-
-    for tdsel in onetdsels:
-        trs = html('tr').not_('.team-totals, .coaches')
-        playerbox[tdsel] = [data.text() for data in trs.find('td.'+tdsel).items() if data.text()]
-
-    # the other field  can be summarized by
-    # non tr class team-totals , td class
-    tdsels = ["min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
-              "assists", "steals", "block-shots", "plus-minus", "efficiency"]
-    for tdselector in tdsels:
-        trs = html('tr').not_('.team-totals')
-        playerbox[tdselector] = [data.text() for data in trs.find('td.'+tdselector).items() if data.text()]
-
-    #for key,value in playerbox.items():
-     #   print('playerbox {} length is {} , detail is {}'.format(key, len(value),value))
-
-    # add logic to get team total
-    for tdselector in TEAMSELECTORS:
-        #only one element
-        teambox[tdselector] = html('tr.team-totals').find('td.'+tdselector).text()
-    #print(teambox)
-    # get coach, assistant, starter
-    playerinfo["coaches"] = html('div.coaches-list span.value').text()
-    playerinfo["assistants"] = [assistant.text() for assistant in html('div.assistants-list span.value').items()]
-    playerinfo["starters"] = [start.text() for start in html('tr.x--player-is-starter td.name').items()]
-    return playerbox, teambox, playerinfo
-
-getbox(html=target)
 
 exit(-1)
 '''
