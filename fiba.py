@@ -14,14 +14,54 @@ boxurl='http://www.fiba.basketball/asiacup/2017/eaba/0606/China-Korea#tab=boxsco
 realboxurl='http://www.fiba.basketball/en/Module/79afbb16-7c16-4786-87e9-480773a6746c/b1324899-5530-4e2e-90fd-b48bdfbdf8dd'
 boxhtml='./box.html'
 
+qualifierurl="http://www.fiba.basketball/basketballworldcup/2019/asian-qualifiers/fullschedule"
+qhtml='./qualifier.html'
+'''
+rsp = requests.get(qualifierurl)
+with open(qhtml, 'w+', encoding='utf-8') as f:
+    f.write(rsp.text)
+
+'''
+
+# date , match url
+def getmatch():
+    matchinfos = list()
+    for daydiv in target('li#Past div.day_content').items():
+        matchday = daydiv('.section_header h4').text()
+        #get day of week
+        from time import strftime, strptime
+        dow = strftime('%A', strptime(matchday, '%d %B %Y'))
+        print("{} {}".format(dow, matchday))
+
+        from collections import namedtuple
+        #use namedtuple to record
+        Matchtuple = namedtuple('Matchtuple', ["date",'matchurl','group', 'venue'])
+        matchinfos = matchinfos + [Matchtuple(matchday, a.attr('href'), a.attr('data-group'), a.attr('data-venues'))for a in daydiv('a.score_cell').items()]
+        print("len is {}, {}".format(len(matchinfos),matchinfos))
+
+    #get gamepage_tabs
+
+
+def getupcomingmatch():
+    pass
+
+with open(qhtml, 'r',encoding='utf-8') as f:
+    html = f.read()
+target = pq(html)
+
+getmatch()
+
+exit(-1)
+
 '''
 rsp = requests.get(realboxurl)
 with open(boxhtml, 'w+', encoding='utf-8') as f:
     f.write(rsp.text)
 '''
-with open(boxhtml, 'r') as f:
+with open(boxhtml, 'r', encoding='utf-8') as f:
     html = f.read()
 target = pq(html)
+
 
 TEAMSELECTORS = ["positions", "names", "min", "pts", "field-goals", "field-goals-2p", "field-goals-3p", "free-throw",
             "reb-offence", "reb-defence", "reb-total", "personal-fouls", "turnovers",
