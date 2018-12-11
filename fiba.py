@@ -7,6 +7,8 @@ import requests
 from io import open
 from operator import itemgetter
 import os
+import argparse
+
 
 qualifierurl="http://www.fiba.basketball/basketballworldcup/2019/asian-qualifiers/fullschedule"
 FIBAURL="http://www.fiba.basketball"
@@ -53,9 +55,9 @@ def getbox(html=None):
         print(Bplayerinfo)
         '''
         print('TeamA')
-        sortplayer(Aplayerbox,kw='pts', num=3)
+        sortplayer(Aplayerbox,kw='pts', num=args.num)
         print('TeamB')
-        sortplayer(Bplayerbox, kw='pts', num=3)
+        sortplayer(Bplayerbox, kw='pts', num=args.num)
         #sortplayer(Aplayerbox,kw="field-goals-3p")
 
 def sortfunc(elem, kw):
@@ -203,12 +205,19 @@ def getmatchbydate(matchinfoes=None, date='1/1/2018'):
                 print("no match details for {}".format(matchurl.split('.')[0]))
 
 
+parser = argparse.ArgumentParser(prog='asia_qualifier')
+parser.add_argument('--date',help="the start of date game will crawl, format is day/month/year, 1/12/2018",default="1/12/2018")
+parser.add_argument('--num', type=int,help="top N player, default is 3", default=3)
+args = parser.parse_args()
+
+
+
 with open(qhtml, 'r',encoding='utf-8') as f:
     html = f.read()
 target = pq(html)
 
 matchinfoes = getmatches()
-getmatchbydate(matchinfoes, date='1/12/2018')
+getmatchbydate(matchinfoes, date=args.date)
 
 exit(-1)
 
