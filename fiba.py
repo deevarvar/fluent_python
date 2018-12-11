@@ -77,8 +77,15 @@ def sortplayer(playerbox, kw='pts', num=None):
         playerlist.append(oneplayer)
     sortedlist = sorted(playerlist, key=lambda elem: sortfunc(elem[kw], kw), reverse=True)
     #print(sortedlist[:num])
+    maxnamelen = 0
     for leader in sortedlist[:num]:
-        print("{name}, {pts}, {plus-minus},{efficiency}".format(**leader))
+        if len(leader['name']) > maxnamelen:
+            maxnamelen = len(leader['name'])
+
+    for leader in sortedlist[:num]:
+        #format string is like {name:{fill}{align}{width}}
+        print("{name:{fill}{align}{namewidth}}, {pts:{fill}{align}3}, {plusminus:{fill}{align}3},{efficiency:{fill}{align}2}".format(name=leader['name'], pts=leader['pts'] ,
+                                                               plusminus=leader['plus-minus'], efficiency=leader['efficiency'], namewidth=maxnamelen, fill=' ', align="<"))
 
 
 def cleandata(playerbox):
